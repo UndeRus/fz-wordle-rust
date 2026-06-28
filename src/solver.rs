@@ -74,6 +74,7 @@ impl Solver {
                     self.remaining.clear(idx);
                 }
             }
+            true
         });
     }
 
@@ -92,17 +93,18 @@ impl Solver {
 
         dict::for_each_word(|idx, word| {
             if !self.remaining.get(idx) {
-                return;
+                return true;
             }
             checked += 1;
             if checked > 100 {
-                return;
+                return false;
             }
             let score = dict::unique_count(word);
             if checked == 1 || score > best_score {
                 best_score = score;
                 best = idx;
             }
+            true
         });
 
         Some(best)

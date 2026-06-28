@@ -17,6 +17,6 @@ bench = false
 test = false
 
 [dependencies]
-flipperzero = { version = "0.16.0", default-features = false }
+flipperzero = { version = "0.16.0" }
 flipperzero-sys = { version = "0.16.0" }
 flipperzero-rt = { version = "0.16.0" }

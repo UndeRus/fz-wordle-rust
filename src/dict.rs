@@ -8,20 +8,15 @@ use flipperzero_sys as sys;
 
 const DICT_PATH: &str = "/ext/apps/Wordle/dict.bin\0";
 
-// Cached storage handle — opened once at startup, never closed
 static mut STORAGE: *mut sys::Storage = ptr::null_mut();
+static mut FILE: *mut sys::File = ptr::null_mut();
 
 pub fn init_storage() {
     unsafe {
         let rec = sys::furi::UnsafeRecord::open(c"storage");
         STORAGE = rec.as_ptr();
-        // Leak the UnsafeRecord — keep storage open for app lifetime
         core::mem::forget(rec);
-    }
-}
 
-fn with_file<F: FnOnce(*mut sys::File)>(f: F) {
-    unsafe {
         let s = STORAGE;
         if s.is_null() {
             return;
@@ -34,38 +29,69 @@ fn with_file<F: FnOnce(*mut sys::File)>(f: F) {
             sys::FSOM_OPEN_EXISTING,
         );
         if opened {
-            f(file);
-            sys::storage_file_close(file);
+            FILE = file;
+        } else {
+            sys::storage_file_free(file);
         }
-        sys::storage_file_free(file);
     }
 }
 
-pub fn for_each_word(mut f: impl FnMut(u16, u32)) {
-    with_file(|file| unsafe {
+pub fn close_storage() {
+    unsafe {
+        if !FILE.is_null() {
+            sys::storage_file_close(FILE);
+            sys::storage_file_free(FILE);
+            FILE = ptr::null_mut();
+        }
+    }
+}
+
+pub fn for_each_word(mut f: impl FnMut(u16, u32) -> bool) {
+    unsafe {
+        let file = FILE;
+        if file.is_null() {
+            return;
+        }
         sys::storage_file_seek(file, 4, true);
-        let mut buf = [0u8; 4];
-        for i in 0..WORD_COUNT as u16 {
-            let nread = sys::storage_file_read(file, buf.as_mut_ptr() as *mut c_void, 4);
-            if nread != 4 {
+        let mut buf = [0u8; 512];
+        let mut idx = 0u16;
+        while idx < WORD_COUNT as u16 {
+            let remaining = WORD_COUNT as u16 - idx;
+            let chunk_words = remaining.min(128) as usize;
+            let to_read = chunk_words * 4;
+            let nread = sys::storage_file_read(file, buf.as_mut_ptr() as *mut c_void, to_read);
+            if nread as usize != to_read {
                 break;
             }
-            let word = u32::from_le_bytes(buf);
-            f(i, word);
+            for wi in 0..chunk_words {
+                let word = u32::from_le_bytes([
+                    buf[wi * 4],
+                    buf[wi * 4 + 1],
+                    buf[wi * 4 + 2],
+                    buf[wi * 4 + 3],
+                ]);
+                if !f(idx, word) {
+                    return;
+                }
+                idx += 1;
+            }
+            sys::furi_delay_ms(0);
         }
-    });
+    }
 }
 
 pub fn get_word(idx: u16) -> u32 {
-    let mut word = 0u32;
-    with_file(|file| unsafe {
+    let mut buf = [0u8; 4];
+    unsafe {
+        let file = FILE;
+        if file.is_null() {
+            return 0;
+        }
         let offset = 4u32 + (idx as u32) * 4;
         sys::storage_file_seek(file, offset, true);
-        let mut buf = [0u8; 4];
         sys::storage_file_read(file, buf.as_mut_ptr() as *mut c_void, 4);
-        word = u32::from_le_bytes(buf);
-    });
-    word
+    }
+    u32::from_le_bytes(buf)
 }
 
 pub fn unpack_word(packed: u32) -> [u8; 5] {
@@ -145,8 +171,7 @@ pub fn word_to_str(word: u32) -> [u8; 11] {
     buf
 }
 
-/// 5x7 pixel bitmap glyphs for all 33 Russian letters (pixels right-aligned: bit0=leftmost)
-const CYR_GLYPHS: [[u8; 7]; 33] = [
+pub const CYR_GLYPHS: [[u8; 7]; 33] = [
     [0x04, 0x0A, 0x11, 0x11, 0x1F, 0x11, 0x11], // А
     [0x1F, 0x10, 0x10, 0x1E, 0x11, 0x11, 0x1E], // Б
     [0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E], // В
@@ -181,24 +206,6 @@ const CYR_GLYPHS: [[u8; 7]; 33] = [
     [0x12, 0x12, 0x12, 0x1E, 0x12, 0x12, 0x12], // Ю
     [0x0F, 0x11, 0x11, 0x0F, 0x05, 0x09, 0x11], // Я
 ];
-
-pub fn draw_cyr_word(canvas: *mut sys::Canvas, x_pos: &[i32; 5], y: i32, word: u32) {
-    let letters = unpack_word(word);
-    for li in 0..5 {
-        let glyph = &CYR_GLYPHS[letters[li] as usize];
-        let ox = x_pos[li];
-        for row in 0..7 {
-            let byte = glyph[row as usize];
-            for col in 0..5 {
-                if byte & (1 << (4 - col)) != 0 {
-                    unsafe {
-                        sys::canvas_draw_dot(canvas, ox + col, y + row);
-                    }
-                }
-            }
-        }
-    }
-}
 
 pub const LETTER_BYTES: [[u8; 3]; 33] = [
     [0xD0, 0x90, 0], // А

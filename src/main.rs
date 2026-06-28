@@ -69,27 +69,26 @@ unsafe fn draw_glyph(canvas: *mut sys::Canvas, x: i32, y: i32, letter_idx: usize
 unsafe fn do_filter() {
     SOLVER.apply_feedback(GUESS, &MARKS);
     let count = SOLVER.count();
-    if count == 0 {
-        let txt = b"No matches\0";
-        RESULT_TEXT[..txt.len()].copy_from_slice(txt);
-    } else if count == 1 {
-        let idx = SOLVER.first_word().unwrap_or(0);
-        GUESS = dict::get_word(idx);
-        let txt = b"Guessed!\0";
-        RESULT_TEXT[..txt.len()].copy_from_slice(txt);
+    if count <= 1 {
+        if count == 1 {
+            let idx = SOLVER.first_word().unwrap_or(0);
+            GUESS = dict::get_word(idx);
+            let txt = b"Guessed!\0";
+            RESULT_TEXT[..txt.len()].copy_from_slice(txt);
+        } else {
+            let txt = b"No matches\0";
+            RESULT_TEXT[..txt.len()].copy_from_slice(txt);
+        }
+        SHOW_RESULT = true;
     } else {
         let best = SOLVER.best_candidate();
         if let Some(idx) = best {
             GUESS = dict::get_word(idx);
         }
-        let mut txt = [0u8; 32];
-        let prefix = b"Remaining: ";
-        txt[..prefix.len()].copy_from_slice(prefix);
-        let i = prefix.len() + u32_to_str(count, &mut txt[prefix.len()..]);
-        txt[i] = 0;
-        RESULT_TEXT = txt;
+        CURSOR = 0;
+        MARKS = [1; 5];
+        SHOW_RESULT = false;
     }
-    SHOW_RESULT = true;
 }
 
 unsafe fn do_reset() {
@@ -145,7 +144,7 @@ unsafe extern "C" fn draw_cb(canvas: *mut sys::Canvas, _ctx: *mut c_void) {
         let rp = RESULT_TEXT.as_ptr();
         sys::canvas_draw_str(canvas, 2, 55, rp as *const c_char);
 
-        let hint = c"Back - next";
+        let hint = c"Back - restart";
         sys::canvas_draw_str(canvas, 2, 63, hint.as_ptr());
         return;
     }
@@ -213,9 +212,7 @@ unsafe extern "C" fn input_cb(event: *mut sys::InputEvent, _ctx: *mut c_void) {
 
     if SHOW_RESULT {
         if ev.key == sys::InputKeyBack {
-            SHOW_RESULT = false;
-            CURSOR = 0;
-            MARKS = [1; 5];
+            NEED_RESET.store(true, Ordering::SeqCst);
         }
         sys::view_port_update(VP);
         return;

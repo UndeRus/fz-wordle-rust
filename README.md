@@ -29,5 +29,3 @@ Create dir on sdcard "apps/Wordle" and put here these files:
 ## Vibecoding
  You can look my session in `data/opencode_session.json`
 
-## TODO
-- fix all cyrillic letters bitmaps

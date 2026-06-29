@@ -16,7 +16,12 @@ filename = "wordle-solver.fap"
 bench = false
 test = false
 
+[build-dependencies]
+image = "0.25"
+
 [dependencies]
 flipperzero = { version = "0.16.0" }
 flipperzero-sys = { version = "0.16.0" }
 flipperzero-rt = { version = "0.16.0" }
+
+

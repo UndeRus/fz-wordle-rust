@@ -93,10 +93,8 @@ unsafe fn do_filter() {
 
 unsafe fn do_reset() {
     SOLVER.init();
-    let best = SOLVER.best_candidate();
-    if let Some(idx) = best {
-        GUESS = dict::get_word(idx);
-    }
+    let pick = (sys::furi_hal_random_get() as usize) % dict::BEST_OPENERS.len();
+    GUESS = dict::get_word(dict::BEST_OPENERS[pick]);
     CURSOR = 0;
     MARKS = [1; 5];
     SHOW_RESULT = false;
@@ -257,10 +255,8 @@ fn main(_args: Option<&CStr>) -> i32 {
     unsafe {
         SOLVER = Solver::new();
         SOLVER.init();
-        let best = SOLVER.best_candidate();
-        if let Some(idx) = best {
-            GUESS = dict::get_word(idx);
-        }
+        let pick = (sys::furi_hal_random_get() as usize) % dict::BEST_OPENERS.len();
+        GUESS = dict::get_word(dict::BEST_OPENERS[pick]);
         MARKS = [1; 5];
         CURSOR = 0;
         SHOW_RESULT = false;

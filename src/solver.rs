@@ -1,4 +1,5 @@
 use crate::dict;
+use flipperzero_sys as sys;
 
 const BITSET_WORDS: usize = (dict::WORD_COUNT + 63) / 64;
 
@@ -89,20 +90,23 @@ impl Solver {
 
         let mut best = 0u16;
         let mut best_score = 0u32;
-        let mut checked = 0u32;
+        let mut seen = 0u32;
 
         dict::for_each_word(|idx, word| {
             if !self.remaining.get(idx) {
                 return true;
             }
-            checked += 1;
-            if checked > 100 {
-                return false;
-            }
             let score = dict::unique_count(word);
-            if checked == 1 || score > best_score {
+            if score > best_score {
                 best_score = score;
                 best = idx;
+                seen = 1;
+            } else if score == best_score {
+                seen += 1;
+                let r = unsafe { sys::furi_hal_random_get() } % seen;
+                if r == 0 {
+                    best = idx;
+                }
             }
             true
         });

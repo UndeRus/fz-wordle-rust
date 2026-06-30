@@ -204,14 +204,18 @@ unsafe extern "C" fn input_cb(event: *mut sys::InputEvent, _ctx: *mut c_void) {
         return;
     }
 
+    // Back on Release (short press → reset, long press already handled above)
+    if ev.type_ == sys::InputTypeRelease && ev.key == sys::InputKeyBack {
+        NEED_RESET.store(true, Ordering::SeqCst);
+        sys::view_port_update(VP);
+        return;
+    }
+
     if ev.type_ != sys::InputTypePress {
         return;
     }
 
     if SHOW_RESULT {
-        if ev.key == sys::InputKeyBack {
-            NEED_RESET.store(true, Ordering::SeqCst);
-        }
         sys::view_port_update(VP);
         return;
     }
@@ -237,9 +241,6 @@ unsafe extern "C" fn input_cb(event: *mut sys::InputEvent, _ctx: *mut c_void) {
         }
         sys::InputKeyOk => {
             NEED_FILTER.store(true, Ordering::SeqCst);
-        }
-        sys::InputKeyBack => {
-            NEED_RESET.store(true, Ordering::SeqCst);
         }
         _ => {}
     }
